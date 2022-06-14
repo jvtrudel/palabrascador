@@ -1,0 +1,75 @@
+#! /bin/bash
+
+
+
+rasca()(
+
+  set -eu -o pipefail
+ 
+
+  while getopts "do:" opts; do
+  case "$opts" in
+    o) OUTPUT="$OPTARG" ;;
+    d) set -x ;;
+  esac 
+  done
+  shift $((OPTIND -1))
+
+  _toplain(){
+    pandoc -f html -t plain
+  }
+
+  _topalabras(){
+	  sed -e 's/[^[:alpha:]]/ /g' -e 's/ /\n/g' | sed '/^[[:space:]]*$/d'  | tr '[:upper:]' '[:lower:]'
+  }
+  _tofreq(){
+    sort | uniq -c
+  }
+
+  _get_html(){
+    if [ -f "$CACHE/$nURL/html" ]; then
+      cat "$CACHE/$nURL/html"
+    else
+      echo -e "url: \"$URL\"\ndate: \"$(date --iso-8601)\"" > "$CACHE/$nURL"/meta
+      curl -L -o "$CACHE/$nURL/html" "$URL"
+      cat "$CACHE/$nURL"/html
+    fi
+  }
+
+  get(){
+  URL="$1"  
+  nURL="${URL//\//}"
+  nURL="${nURL//:/}"
+
+  mkdir -p "$CACHE/$nURL"
+
+  _get_html "$URL" |\
+	  _toplain | tee "$CACHE/$nURL/txt" |\
+	  _topalabras | _tofreq > "$CACHE/$nURL/freq" 
+  }
+
+  list(){
+    ls "$CACHE" | cat -n
+  }
+
+  show(){
+    fn=$(ls "$CACHE" | sed "$1q;d" | awk '{ print $1}' )
+    cat $CACHE/$fn/freq
+  }
+
+  open(){ 
+    fn=$(ls "$CACHE" | sed "$1q;d" | awk '{ print $1}' )
+    url=$(cat "$CACHE/$fn/meta" | grep "^url: " | awk '{ print $ 2 }' | sed 's/"//g')
+    echo $url
+
+  }
+
+  OUTPUT=/dev/stdout
+  CACHE=.rasca
+  [ -d "$CACHE" ] || mkdir -p "$CACHE"
+
+  "$@"
+
+)
+
+[ "${BASH_SOURCE[0]}" != "$0" ] || rasca "$@"
